@@ -122,11 +122,11 @@ class MenuScene extends Phaser.Scene {
 
         // Arena name
         this.add.text(cx, y0 + cardH * 0.1, arena.name.toUpperCase(), {
-            fontSize: `${Math.round(cardW * 0.12)}px`,
+            fontSize: `${Math.round(cardW * 0.085)}px`,
             fontFamily: '"Courier New", monospace',
             color: accentHex,
             stroke: '#1a0030',
-            strokeThickness: 6,
+            strokeThickness: 4,
         }).setOrigin(0.5).setDepth(5);
 
         // Mini preview bg strip
