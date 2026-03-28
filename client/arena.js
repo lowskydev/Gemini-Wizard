@@ -16,7 +16,7 @@ const randRange = (min, max) => Math.random() * (max - min) + min;
 
 /** Place a tileSprite platform and add it to a staticGroup */
 const makeTilePlat = (scene, group, textureKey, frameKey, x, y, w, tileScale = 1.5) => {
-    const h = 32 * tileScale;
+    const h = 16 * tileScale; // One tile high
     const plat = frameKey
         ? scene.add.tileSprite(x, y, w, h, textureKey, frameKey)
         : scene.add.tileSprite(x, y, w, h, textureKey);
@@ -63,7 +63,7 @@ window.ARENAS = {
             scene.load.image('bg3', 'assets/parallax_mountain_pack/layers/parallax-mountain-mountains.png');
             scene.load.image('bg4', 'assets/parallax_mountain_pack/layers/parallax-mountain-trees.png');
             scene.load.image('bg5', 'assets/parallax_mountain_pack/layers/parallax-mountain-foreground-trees.png');
-            scene.load.image('ruin', 'assets/classical_ruin_tiles.png');
+            scene.load.image('platformertiles', 'assets/platformertiles.png');
         },
 
         buildBackground(scene) {
@@ -76,28 +76,28 @@ window.ARENAS = {
         },
 
         buildPlatforms(scene, width, height) {
-            // Extract stone sub-texture once (guard against duplicate)
-            if (!scene.textures.get('ruin').has('plat_stone')) {
-                scene.textures.get('ruin').add('plat_stone', 0, 192, 208, 64, 32);
+            // Extract mossy rock from platformertiles (guessing 48,0 or similar)
+            if (!scene.textures.get('platformertiles').has('ruins_plat')) {
+                scene.textures.get('platformertiles').add('ruins_plat', 0, 48, 0, 16, 16);
             }
 
             const group = scene.physics.add.staticGroup();
 
             // ── Fixed layout ─────────────────────────────────────────────
-            makeTilePlat(scene, group, 'ruin', 'plat_stone', width * 0.25, height - 150, 256);
-            makeTilePlat(scene, group, 'ruin', 'plat_stone', width * 0.75, height - 250, 256);
-            makeTilePlat(scene, group, 'ruin', 'plat_stone', width * 0.5, height - 400, 256);
-
-            // ── Random extras (2 narrow platforms per match) ──────────────
-            const usedX = [width * 0.25, width * 0.5, width * 0.75];
-            for (let i = 0; i < 2; i++) {
-                let rx;
-                do { rx = randRange(width * 0.1, width * 0.9); }
-                while (usedX.some(x => Math.abs(x - rx) < 160));
-                usedX.push(rx);
-                const ry = randRange(height - 350, height - 180);
-                makeTilePlat(scene, group, 'ruin', 'plat_stone', rx, ry, 128);
-            }
+            const plats = [
+                makeTilePlat(scene, group, 'platformertiles', 'ruins_plat', width * 0.25, height - 150, 256, 2.0),
+                makeTilePlat(scene, group, 'platformertiles', 'ruins_plat', width * 0.75, height - 250, 256, 2.0),
+                makeTilePlat(scene, group, 'platformertiles', 'ruins_plat', width * 0.5, height - 400, 256, 2.0)
+            ];
+            
+            // Brighter golden tint + white top-highlight for maximum contrast
+            const highlightCol = 0xfff0aa;
+            plats.forEach(p => {
+                p.setTint(highlightCol);
+                const line = scene.add.graphics().setDepth(p.depth + 1);
+                line.lineStyle(3, 0xffffff, 0.6);
+                line.lineBetween(p.x - p.width/2, p.y - p.height/2 + 2, p.x + p.width/2, p.y - p.height/2 + 2);
+            });
 
             return group;
         }
@@ -121,15 +121,14 @@ window.ARENAS = {
             bg.fillGradientStyle(0x050510, 0x050510, 0x0a0525, 0x0a0525, 1);
             bg.fillRect(0, 0, width, height);
 
-            // Moon from the platformertiles sheet (top-centre area ≈ 16x16 @ (48,0))
-            // Draw a procedural glowing moon instead for reliability
+            // Moon procedural glowing moon
             const moonGfx = scene.add.graphics().setDepth(-4);
             moonGfx.fillStyle(0xd8e8ff, 0.9);
             moonGfx.fillCircle(width * 0.5, height * 0.18, 48);
             moonGfx.fillStyle(0xffffff, 0.3);
             moonGfx.fillCircle(width * 0.5, height * 0.18, 52);
 
-            // Atmospheric dark vignette at edges
+            // Atmospheric dark vignette
             const vig = scene.add.graphics().setDepth(-3);
             vig.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.6, 0.6, 0.0, 0.0);
             vig.fillRect(0, 0, width / 2, height);
@@ -144,17 +143,13 @@ window.ARENAS = {
             floor.lineStyle(2, 0x3a2050, 1);
             floor.strokeRect(0, height - 60, width, 60);
 
-            // Use platformertiles for the wall/border tiles (top-left dark brick area)
-            // Extract a 16x16 dark brick tile from the sheet (top-left corner)
+            // Border walls
             if (!scene.textures.get('platformertiles').has('crypt_brick')) {
                 scene.textures.get('platformertiles').add('crypt_brick', 0, 0, 0, 16, 16);
             }
-            // Tile both side walls with the brick texture
             const wallW = 48;
-            const wallL = scene.add.tileSprite(wallW / 2, height / 2, wallW, height, 'platformertiles', 'crypt_brick').setDepth(-1);
-            wallL.tileScaleX = 2; wallL.tileScaleY = 2;
-            const wallR = scene.add.tileSprite(width - wallW / 2, height / 2, wallW, height, 'platformertiles', 'crypt_brick').setDepth(-1);
-            wallR.tileScaleX = 2; wallR.tileScaleY = 2;
+            scene.add.tileSprite(wallW / 2, height / 2, wallW, height, 'platformertiles', 'crypt_brick').setDepth(-1).setTileScale(2);
+            scene.add.tileSprite(width - wallW / 2, height / 2, wallW, height, 'platformertiles', 'crypt_brick').setDepth(-1).setTileScale(2);
         },
 
         buildPlatforms(scene, width, height) {
@@ -165,12 +160,21 @@ window.ARENAS = {
 
             const group = scene.physics.add.staticGroup();
 
-            // ── Fixed layout — cleaner staggered crypt ledges ─────────────────────
-            makeTilePlat(scene, group, 'platformertiles', 'crypt_plat', width * 0.22, height - 160, 220, 2.0);
-            makeTilePlat(scene, group, 'platformertiles', 'crypt_plat', width * 0.78, height - 220, 220, 2.0);
-            makeTilePlat(scene, group, 'platformertiles', 'crypt_plat', width * 0.5, height - 380, 250, 2.0);
+            // ── Fixed layout ─────────────────────────────────────────────
+            const plats = [
+                makeTilePlat(scene, group, 'platformertiles', 'crypt_plat', width * 0.22, height - 160, 220, 2.0),
+                makeTilePlat(scene, group, 'platformertiles', 'crypt_plat', width * 0.78, height - 220, 220, 2.0),
+                makeTilePlat(scene, group, 'platformertiles', 'crypt_plat', width * 0.5, height - 380, 250, 2.0)
+            ];
 
-            // Removed random extras for a cleaner arena
+            // Brighter purple tint + white top-highlight
+            const highlightCol = 0xcab2ff;
+            plats.forEach(p => {
+                p.setTint(highlightCol);
+                const line = scene.add.graphics().setDepth(p.depth + 1);
+                line.lineStyle(3, 0xffffff, 0.6);
+                line.lineBetween(p.x - p.width/2, p.y - p.height/2 + 2, p.x + p.width/2, p.y - p.height/2 + 2);
+            });
 
             return group;
         }

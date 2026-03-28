@@ -180,11 +180,11 @@ class MenuScene extends Phaser.Scene {
         const btnH = cardH * 0.13;
         const btnW = cardW * 0.7;
         const btnText = this.add.text(cx, y0 + cardH * 0.85, 'SELECT', {
-            fontSize: `${Math.round(cardW * 0.1)}px`,
+            fontSize: `${Math.round(cardW * 0.055)}px`,
             fontFamily: '"Courier New", monospace',
             color: accentHex,
             stroke: '#1a0030',
-            strokeThickness: 5,
+            strokeThickness: 3,
         }).setOrigin(0.5).setDepth(6);
 
         // Pulse tween on the button text
