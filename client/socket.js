@@ -48,10 +48,5 @@ window.castSpellFromAudio = (result) => {
         console.warn('[Socket]: castSpellFromAudio called before GameScene was ready.');
         return;
     }
-    window.spellCaster.cast(  // eslint-disable-line no-undef
-        result,
-        gameSceneRef.myPlayer,
-        gameSceneRef.otherPlayer,
-        gameSceneRef.input.activePointer
-    );
+    gameSceneRef.prepareSpell(result);
 };
