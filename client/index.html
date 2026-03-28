@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,8 +11,13 @@
     <!-- Socket.io client (served by Node.js automatically) -->
     <script src="/socket.io/socket.io.js"></script>
 </head>
+
 <body>
     <div id="game-container"></div>
+    <!-- config.js MUST be first so CONFIG is defined before audio.js reads it -->
+    <script src="config.js"></script>
+    <script src="audio.js"></script>
     <script src="game.js"></script>
 </body>
+
 </html>
