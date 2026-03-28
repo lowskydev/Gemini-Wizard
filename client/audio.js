@@ -1,7 +1,7 @@
 // audio.js - Web Audio & Gemini AI Integration
 
 const API_KEY = CONFIG.GEMINI_API_KEY;
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
 
 // System prompt exactly as defined in the skill file
 const SYSTEM_PROMPT = `Listen to the audio. Determine which spell the user is trying to cast. Return ONLY a valid JSON object matching this schema: { "spell": "fireball" | "frostbite" | "bolt" | "nova", "backfire": boolean }. If the user is mumbling, stuttering, or the word is unintelligible, set backfire to true. Do not wrap the output in markdown code blocks.`;
