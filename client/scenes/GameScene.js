@@ -3,6 +3,8 @@
 // HP is server-authoritative: damage events emit SPELL_HIT; server broadcasts HP_UPDATE.
 // ─────────────────────────────────────────────────────────────────────────────
 
+const MAX_SPELL_SHOTS = 3;
+
 class GameScene extends Phaser.Scene {  // eslint-disable-line no-undef
 
     constructor() {
@@ -18,6 +20,7 @@ class GameScene extends Phaser.Scene {  // eslint-disable-line no-undef
         this.castingHUD = null;
         this.stateTimer = 0;
         this.STATE_INTERVAL = 50; // ms — 20 updates/sec
+        this.shotPips = [];       // visual shot indicators
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -69,6 +72,7 @@ class GameScene extends Phaser.Scene {  // eslint-disable-line no-undef
             this._drawHealthBar(this.player1);
             this._drawHealthBar(this.player2);
             this._updateIndicator(time);
+            this._updateShotPips(time);
             this._emitState(delta);
             if (this.castingHUD) this.castingHUD.update();
         } catch (err) {
@@ -156,6 +160,9 @@ class GameScene extends Phaser.Scene {  // eslint-disable-line no-undef
             p.isInvulnerable = false;
             p.activeDebuffs = {};
             p.hpBar = this.add.graphics();
+            // Multi-shot tracking
+            p.preparedSpell = null;
+            p.shotsRemaining = 0;
             return p;
         };
         this.player1 = make(200, false);
@@ -195,22 +202,24 @@ class GameScene extends Phaser.Scene {  // eslint-disable-line no-undef
 
     _buildInput() {
         this.wasd = {
-            left:  this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),     // eslint-disable-line no-undef
+            left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),     // eslint-disable-line no-undef
             right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),     // eslint-disable-line no-undef
-            down:  this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),     // eslint-disable-line no-undef
-            jump:  this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE), // eslint-disable-line no-undef
+            down: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),     // eslint-disable-line no-undef
+            jump: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE), // eslint-disable-line no-undef
         };
 
-        // Click to fire the prepared spell at the cursor
+        // Click to fire the prepared spell at the cursor (up to MAX_SPELL_SHOTS times)
         this.input.on('pointerdown', (pointer) => {
-            if (!this.myPlayer?.preparedSpell) return;
+            if (!this.myPlayer?.preparedSpell || this.myPlayer.shotsRemaining <= 0) return;
 
             const result = this.myPlayer.preparedSpell;
-            this.myPlayer.preparedSpell = null;
+            this.myPlayer.shotsRemaining--;
 
             const scale = (typeof volumeToScale !== 'undefined') ? volumeToScale(result.volume) : 1.0; // eslint-disable-line no-undef
 
-            window.spellCaster.cast(result, this.myPlayer, this.otherPlayer, pointer);  // eslint-disable-line no-undef
+            // Pass skipStateReset=true if shots remain so spells.js doesn't clear to IDLE
+            const isLastShot = this.myPlayer.shotsRemaining <= 0;
+            window.spellCaster.cast(result, this.myPlayer, this.otherPlayer, pointer, isLastShot);  // eslint-disable-line no-undef
 
             // Broadcast to other player
             socket.emit('SPELL_CAST', {  // eslint-disable-line no-undef
@@ -222,6 +231,106 @@ class GameScene extends Phaser.Scene {  // eslint-disable-line no-undef
                 angle: Math.atan2(pointer.worldY - this.myPlayer.y, pointer.worldX - this.myPlayer.x),
                 scale: scale,
             });
+
+            // Flash the used pip
+            this._flashUsedPip(this.myPlayer.shotsRemaining);
+
+            // Clear spell data when all shots used
+            if (isLastShot) {
+                this.myPlayer.preparedSpell = null;
+            }
+        });
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  Shot pip indicators
+    // ═════════════════════════════════════════════════════════════════════════
+
+    _buildShotPips() {
+        // Destroy old pips if they exist
+        this.shotPips.forEach(p => p.destroy());
+        this.shotPips = [];
+
+        for (let i = 0; i < MAX_SPELL_SHOTS; i++) {
+            const pip = this.add.graphics().setDepth(15);
+            this.shotPips.push(pip);
+        }
+    }
+
+    _updateShotPips(time) {
+        if (!this.myPlayer) return;
+
+        // Lazy-init pips
+        if (this.shotPips.length === 0) this._buildShotPips();
+
+        const spell = this.myPlayer.preparedSpell;
+        const shots = this.myPlayer.shotsRemaining || 0;
+
+        if (!spell || shots <= 0) {
+            this.shotPips.forEach(p => p.setVisible(false));
+            return;
+        }
+
+        const cfg = window.SPELL_CONFIG?.SPELLS?.[spell.spell];
+        const color = cfg?.color ?? 0x00ffcc;
+        const px = this.myPlayer.x;
+        const py = this.myPlayer.y;
+        const spacing = 22;
+        const startX = px - ((MAX_SPELL_SHOTS - 1) * spacing) / 2;
+        const pipY = py + 60; // below the player
+
+        const pulse = 0.8 + Math.sin(time / 200) * 0.2;
+
+        for (let i = 0; i < MAX_SPELL_SHOTS; i++) {
+            const pip = this.shotPips[i];
+            pip.clear();
+
+            const cx = startX + i * spacing;
+            pip.setPosition(cx, pipY);
+            pip.setVisible(true);
+
+            if (i < shots) {
+                // Active pip — filled with spell colour + glow ring
+                pip.fillStyle(color, 0.95 * pulse);
+                pip.fillCircle(0, 0, 8);
+                pip.lineStyle(2, 0xffffff, 0.6 * pulse);
+                pip.strokeCircle(0, 0, 8);
+                // Inner bright core
+                pip.fillStyle(0xffffff, 0.5 * pulse);
+                pip.fillCircle(0, 0, 3);
+            } else {
+                // Spent pip — dim outline only
+                pip.lineStyle(2, 0x555555, 0.5);
+                pip.strokeCircle(0, 0, 8);
+                pip.fillStyle(0x111111, 0.3);
+                pip.fillCircle(0, 0, 8);
+            }
+        }
+    }
+
+    _flashUsedPip(shotsAfter) {
+        // shotsAfter = remaining shots after this shot was fired
+        // The pip that was just used is at index: shotsAfter (0-indexed from left)
+        const pipIndex = shotsAfter;
+        if (pipIndex < 0 || pipIndex >= this.shotPips.length) return;
+
+        const pip = this.shotPips[pipIndex];
+        if (!pip) return;
+
+        // Flash white burst then fade
+        const burst = this.add.graphics().setDepth(16);
+        burst.fillStyle(0xffffff, 0.9);
+        burst.fillCircle(0, 0, 14);
+        burst.setPosition(pip.x, pip.y);
+
+        this.tweens.add({
+            targets: burst,
+            alpha: 0,
+            scaleX: 2.5,
+            scaleY: 2.5,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => burst.destroy(),
         });
     }
 
@@ -255,7 +364,8 @@ class GameScene extends Phaser.Scene {  // eslint-disable-line no-undef
     prepareSpell(result) {
         if (!this.myPlayer) return;
         this.myPlayer.preparedSpell = result;
-        console.log('[GameScene]: Spell Prepared:', result.spell);
+        this.myPlayer.shotsRemaining = MAX_SPELL_SHOTS;
+        console.log(`[GameScene]: Spell Prepared: ${result.spell} (${MAX_SPELL_SHOTS} shots)`);
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -350,9 +460,10 @@ class GameScene extends Phaser.Scene {  // eslint-disable-line no-undef
         if (this.preparedLabel) {
             this.preparedLabel.setPosition(this.myPlayer.x, this.myPlayer.y - 110 + bob);
             const spell = this.myPlayer.preparedSpell?.spell;
-            if (spell) {
+            const shots = this.myPlayer.shotsRemaining || 0;
+            if (spell && shots > 0) {
                 const cfg = window.SPELL_CONFIG?.SPELLS?.[spell];
-                this.preparedLabel.setText(`✨ ${(cfg?.displayName ?? spell).toUpperCase()}`);
+                this.preparedLabel.setText(`✨ ${(cfg?.displayName ?? spell).toUpperCase()} ×${shots}`);
                 this.preparedLabel.setColor(cfg?.glowColor ?? '#00ffff');
                 this.preparedLabel.setVisible(true);
                 this.playerIndicator.setTint(cfg?.color ?? 0x00ffff);
@@ -419,6 +530,9 @@ class GameScene extends Phaser.Scene {  // eslint-disable-line no-undef
         player.body.setVelocity(0, 0);
         player.hpBar?.clear();
         player.activeDebuffs = {};
+        // Clear any remaining shots on death
+        player.preparedSpell = null;
+        player.shotsRemaining = 0;
 
         this.time.delayedCall(3000, () => {
             player.hp = 100;

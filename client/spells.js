@@ -41,8 +41,9 @@ class SpellCaster {
      * @param {Phaser.GameObjects.Sprite} caster
      * @param {Phaser.GameObjects.Sprite} target
      * @param {{ worldX, worldY }}        pointer
+     * @param {boolean}                   isLastShot — only reset to IDLE if true
      */
-    cast(result, caster, target, pointer) {
+    cast(result, caster, target, pointer, isLastShot = true) {
         try {
             if (!caster) return;
 
@@ -60,10 +61,12 @@ class SpellCaster {
             // ALL spells are directional projectiles aimed at the cursor
             this._launchProjectile(caster, result.spell, scale, targetX, targetY);
 
-            // Clear state → IDLE
-            window.dispatchEvent(new CustomEvent('castStateChange', {
-                detail: { state: CastState.IDLE }
-            }));
+            // Only clear state → IDLE after the last shot
+            if (isLastShot) {
+                window.dispatchEvent(new CustomEvent('castStateChange', {
+                    detail: { state: CastState.IDLE }
+                }));
+            }
 
         } catch (err) {
             console.error('[SpellCaster.cast Error]:', err);
