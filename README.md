@@ -4,6 +4,8 @@ A 2-player LAN wizard duel — shout spells into your microphone, aim with your 
 
 Built with Phaser 3, Socket.io, Web Audio, and the Gemini AI API.
 
+![Wizard Arena Gameplay](assets/public/gameplay.png)
+
 ---
 
 ## Quick Start (3 steps)
