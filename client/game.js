@@ -401,7 +401,7 @@ class GameScene extends Phaser.Scene {
             // ── Fireball group ────────────────────────────────────────────────
             this.fireballs = this.physics.add.group({
                 defaultKey: 'fireball_tex',
-                maxSize: 30,
+                // no maxSize — pool grows as needed, no exhaustion
                 allowGravityY: false,
             });
 
