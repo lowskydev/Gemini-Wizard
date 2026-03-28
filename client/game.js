@@ -5,13 +5,13 @@
 
 const config = {
     type: Phaser.AUTO,  // eslint-disable-line no-undef
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: 1920,
+    height: 1080,
     parent: 'game-container',
-    backgroundColor: '#1a1a2e',
+    transparent: true,
     pixelArt: true,
     scale: {
-        mode: Phaser.Scale.RESIZE,       // eslint-disable-line no-undef
+        mode: Phaser.Scale.ENVELOP,       // eslint-disable-line no-undef
         autoCenter: Phaser.Scale.CENTER_BOTH,  // eslint-disable-line no-undef
     },
     physics: {
