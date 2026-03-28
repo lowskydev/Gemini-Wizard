@@ -1,28 +1,25 @@
 // socket.js — Socket.io connection + server event wiring
 // ─────────────────────────────────────────────────────────────────────────────
-// Exposes two globals used by GameScene:
-//   socket       — the live Socket.io instance
-//   myPlayerId   — 'Player 1' | 'Player 2' (set once server responds)
-//
-// Also owns the audio→game bridge so audio.js can stay decoupled from Phaser.
+// Globals exposed to GameScene:
+//   socket       — live Socket.io instance
+//   myPlayerId   — 'Player 1' | 'Player 2'
+//   gameSceneRef — injected by GameScene.create()
 // ─────────────────────────────────────────────────────────────────────────────
 
-const socket = io();   // eslint-disable-line no-undef
+const socket = io();  // eslint-disable-line no-undef
 
-let myPlayerId = null;  // assigned by the server on connect
-let gameSceneRef = null; // live reference injected by GameScene.create()
+let myPlayerId = null;
+let gameSceneRef = null;
 
-// ── Server → Client ───────────────────────────────────────────────────────────
+// ── Server → Client ────────────────────────────────────────────────────────
 
 socket.on('connect', () => {
-    console.log('[Socket]: Connected to server —', socket.id);
+    console.log('[Socket]: Connected —', socket.id);
 });
 
 socket.on('PLAYER_JOINED', ({ id, socketId }) => {
     myPlayerId = id;
-    console.log(`[Socket]: Assigned as ${id} (socket ${socketId})`);
-
-    // GameScene may already be running when this arrives
+    console.log(`[Socket]: Assigned ${id} (socket ${socketId})`);
     if (gameSceneRef) gameSceneRef.assignPlayers();
 });
 
@@ -34,17 +31,27 @@ socket.on('BROADCAST_SPELL', (data) => {
     if (gameSceneRef) gameSceneRef.onRemoteSpell(data);
 });
 
+/** Server has resolved damage — update the authoritative HP display. */
+socket.on('HP_UPDATE', (data) => {
+    if (gameSceneRef) gameSceneRef.onHpUpdate(data);
+});
+
 socket.on('connect_error', (err) => {
     console.error('[Socket]: connect_error —', err.message);
 });
 
-// ── Audio → Game bridge ───────────────────────────────────────────────────────
+// ── Audio → Game bridge ────────────────────────────────────────────────────
 // audio.js calls window.castSpellFromAudio(result) after Gemini responds.
 
 window.castSpellFromAudio = (result) => {
-    if (gameSceneRef) {
-        gameSceneRef.castSpellFromResult(result);
-    } else {
+    if (!gameSceneRef) {
         console.warn('[Socket]: castSpellFromAudio called before GameScene was ready.');
+        return;
     }
+    window.spellCaster.cast(  // eslint-disable-line no-undef
+        result,
+        gameSceneRef.myPlayer,
+        gameSceneRef.otherPlayer,
+        gameSceneRef.input.activePointer
+    );
 };
