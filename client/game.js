@@ -1,9 +1,8 @@
 // ─── Socket.io connection ────────────────────────────────────────────────────
 const socket = io();
 
-// ─── Multiplayer state (module-level, shared across scenes) ──────────────────
-let myPlayerId = null;
-let gameSceneRef = null;
+let myPlayerId = null;   // 'Player 1' or 'Player 2'
+let gameSceneRef = null; // live reference to active GameScene
 
 socket.on('connect', () => {
     console.log('[Client]: Connected to server via socket.io');
@@ -23,23 +22,12 @@ socket.on('BROADCAST_SPELL', (data) => {
     if (gameSceneRef) gameSceneRef.onRemoteSpell(data);
 });
 
+// ─── Audio bridge ─────────────────────────────────────────────────────────────
 window.castSpellFromAudio = (result) => {
     if (gameSceneRef) gameSceneRef.castSpellFromResult(result);
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const createRectTexture = (scene, key, width, height, color) => {
-    try {
-        const gfx = scene.add.graphics();
-        gfx.fillStyle(color, 1);
-        gfx.fillRect(0, 0, width, height);
-        gfx.generateTexture(key, width, height);
-        gfx.destroy();
-    } catch (err) {
-        console.error('[createRectTexture Error]:', err);
-    }
-};
 
 const createCircleTexture = (scene, key, radius, color) => {
     try {
@@ -104,10 +92,9 @@ function createSoulsButton(scene, x, y, textStr, onClick) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  SCENES
+//  MAIN MENU SCENE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ── MainMenuScene — friend's enhanced version + live socket identity labels ───
 class MainMenuScene extends Phaser.Scene {
     constructor() {
         super({ key: 'MainMenuScene' });
@@ -115,60 +102,73 @@ class MainMenuScene extends Phaser.Scene {
         this.selectedClass = 1;
     }
 
+    preload() {
+        // Preload bg so the menu has the same atmosphere
+        this.load.image('bg1', 'assets/parallax_mountain_pack/layers/parallax-mountain-bg.png');
+        this.load.image('bg2', 'assets/parallax_mountain_pack/layers/parallax-mountain-montain-far.png');
+        this.load.image('bg3', 'assets/parallax_mountain_pack/layers/parallax-mountain-mountains.png');
+    }
+
     create() {
         const { width, height } = this.scale;
 
-        const vignette = this.add.graphics();
-        vignette.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.0, 0.0, 0.8, 0.8);
-        vignette.fillRect(0, 0, width, height);
+        // Atmospheric background (first 3 layers — trees would obscure the UI)
+        this.add.image(width / 2, height / 2, 'bg1').setDisplaySize(width, height).setDepth(-3);
+        this.add.image(width / 2, height / 2, 'bg2').setDisplaySize(width, height).setDepth(-2);
+        this.add.image(width / 2, height / 2, 'bg3').setDisplaySize(width, height).setDepth(-1);
 
-        this.title = this.add.text(width / 2, height * 0.25, 'Vibe-Wizard Arena', {
+        // Dark overlay so UI is readable
+        this.add.rectangle(0, 0, width, height, 0x000000, 0.55).setOrigin(0);
+
+        // Title
+        this.title = this.add.text(width / 2, height * 0.18, 'Vibe-Wizard Arena', {
             fontFamily: 'Georgia, serif',
-            fontSize: '80px',
+            fontSize: '72px',
             color: '#ffffff',
             fontStyle: 'bold'
         }).setOrigin(0.5);
-        this.title.setShadow(2, 4, '#000000', 10, false, true);
+        this.title.setShadow(2, 4, '#000000', 14, false, true);
 
+        // Separator
         const line = this.add.graphics();
-        line.lineStyle(2, 0x550000, 0.8);
+        line.lineStyle(2, 0x550000, 0.9);
         line.beginPath();
-        line.moveTo(width / 2 - 200, height * 0.35);
-        line.lineTo(width / 2 + 200, height * 0.35);
+        line.moveTo(width / 2 - 220, height * 0.29);
+        line.lineTo(width / 2 + 220, height * 0.29);
         line.strokePath();
 
-        // Friend's wider lobby box
+        // Lobby box
         const lobbyBox = this.add.graphics();
-        lobbyBox.fillStyle(0x000000, 0.6);
+        lobbyBox.fillStyle(0x000000, 0.65);
         lobbyBox.lineStyle(1, 0x333333, 1);
-        lobbyBox.fillRect(width / 2 - 350, height * 0.38, 700, 370);
-        lobbyBox.strokeRect(width / 2 - 350, height * 0.38, 700, 370);
+        lobbyBox.fillRect(width / 2 - 350, height * 0.32, 700, 390);
+        lobbyBox.strokeRect(width / 2 - 350, height * 0.32, 700, 390);
 
-        this.add.text(width / 2, height * 0.42, 'LAN LOBBY', {
+        this.add.text(width / 2, height * 0.36, 'LAN LOBBY', {
             fontFamily: 'Georgia, serif',
-            fontSize: '28px',
+            fontSize: '26px',
             color: '#cccccc',
             letterSpacing: 4
         }).setOrigin(0.5);
 
-        // Two-column layout from friend, labels updated with live socket identity
+        // Live socket identity
         const p1Label = (myPlayerId === 'Player 1') ? 'Player 1: You ✓' : 'Player 1: Connected';
         const p2Label = (myPlayerId === 'Player 2') ? 'Player 2: You ✓' : 'Player 2: Waiting...';
         const p1Color = (myPlayerId === 'Player 1') ? '#4488ff' : '#ff4444';
         const p2Color = (myPlayerId === 'Player 2') ? '#ff4444' : '#555555';
 
-        this.add.text(width / 2 - 150, height * 0.49, p1Label, {
-            fontFamily: 'Georgia, serif', fontSize: '22px', color: p1Color
+        this.add.text(width / 2 - 150, height * 0.43, p1Label, {
+            fontFamily: 'Georgia, serif', fontSize: '20px', color: p1Color
         }).setOrigin(0.5);
 
-        this.add.text(width / 2 + 150, height * 0.49, p2Label, {
-            fontFamily: 'Georgia, serif', fontSize: '22px', color: p2Color
+        this.add.text(width / 2 + 150, height * 0.43, p2Label, {
+            fontFamily: 'Georgia, serif', fontSize: '20px', color: p2Color
         }).setOrigin(0.5);
 
-        // Friend's class selection cards — unchanged
-        this.add.text(width / 2, height * 0.56, 'Choose Your Wizard', {
+        // Class selection
+        this.add.text(width / 2, height * 0.50, 'Choose Your Wizard', {
             fontFamily: 'Georgia, serif',
-            fontSize: '20px',
+            fontSize: '18px',
             color: '#aaaaaa',
             fontStyle: 'italic'
         }).setOrigin(0.5);
@@ -180,14 +180,14 @@ class MainMenuScene extends Phaser.Scene {
             const bg = this.add.graphics();
             const text = this.add.text(0, 30, label, {
                 fontFamily: 'Georgia, serif',
-                fontSize: '20px',
+                fontSize: '19px',
                 color: '#ffffff',
                 fontStyle: 'bold'
             }).setOrigin(0.5);
 
             const avatar = this.add.graphics();
             avatar.fillStyle(colorHex, 1);
-            avatar.fillCircle(0, -15, 25);
+            avatar.fillCircle(0, -15, 24);
 
             container.add([bg, avatar, text]);
 
@@ -209,7 +209,6 @@ class MainMenuScene extends Phaser.Scene {
 
             const zone = this.add.zone(0, 0, w, h).setInteractive({ cursor: 'pointer' });
             container.add(zone);
-
             zone.on('pointerdown', () => { this.selectedClass = classId; this.events.emit('classChanged'); });
             zone.on('pointerover', () => { container.setScale(1.05); });
             zone.on('pointerout', () => { container.setScale(1); });
@@ -218,14 +217,14 @@ class MainMenuScene extends Phaser.Scene {
             drawCard();
         };
 
-        createCard(width / 2 - 120, height * 0.66, 'Pyromancer', 0xff4400, 1);
-        createCard(width / 2 + 120, height * 0.66, 'Frost Magus', 0x0088ff, 2);
+        createCard(width / 2 - 120, height * 0.61, 'Pyromancer', 0xff4400, 1);
+        createCard(width / 2 + 120, height * 0.61, 'Frost Magus', 0x0088ff, 2);
 
-        this.add.text(width / 2, height * 0.775, '🎮  A/D to move  ·  W to jump  ·  SHIFT to cast', {
-            fontFamily: 'Georgia, serif', fontSize: '16px', color: '#666666'
+        this.add.text(width / 2, height * 0.725, '🎮  A/D to move  ·  SPACE to jump (×2)  ·  SHIFT to cast', {
+            fontFamily: 'Georgia, serif', fontSize: '15px', color: '#666666'
         }).setOrigin(0.5);
 
-        createSoulsButton(this, width / 2, height * 0.86, 'ENTER ARENA', () => {
+        createSoulsButton(this, width / 2, height * 0.83, 'ENTER ARENA', () => {
             this.scene.start('GameScene');
         });
     }
@@ -234,11 +233,14 @@ class MainMenuScene extends Phaser.Scene {
         this.timeElapsed += delta;
         const scale = 1 + Math.sin(this.timeElapsed * 0.0015) * 0.02;
         this.title.setScale(scale);
-        this.title.setAlpha(0.8 + Math.sin(this.timeElapsed * 0.002) * 0.2);
+        this.title.setAlpha(0.85 + Math.sin(this.timeElapsed * 0.002) * 0.15);
     }
 }
 
-// ── EndScene ──────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  END SCENE
+// ═══════════════════════════════════════════════════════════════════════════════
+
 class EndScene extends Phaser.Scene {
     constructor() {
         super({ key: 'EndScene' });
@@ -248,9 +250,9 @@ class EndScene extends Phaser.Scene {
     create() {
         gameSceneRef = null;
         const { width, height } = this.scale;
-        this.add.rectangle(0, 0, width, height, 0x440000, 0.4).setOrigin(0);
+        this.add.rectangle(0, 0, width, height, 0x440000, 0.5).setOrigin(0);
 
-        this.deathText = this.add.text(width / 2, height * 0.4, 'YOU DIED', {
+        this.deathText = this.add.text(width / 2, height * 0.38, 'YOU DIED', {
             fontFamily: 'Georgia, serif',
             fontSize: '140px',
             color: '#ff0000',
@@ -281,111 +283,235 @@ class EndScene extends Phaser.Scene {
     }
 }
 
-// ── GameScene — full multiplayer (my version, untouched) ──────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  GAME SCENE
+// ═══════════════════════════════════════════════════════════════════════════════
+
 class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
-        this.localPlayer = null;
-        this.remotePlayer = null;
-        this.p1Sprite = null;
-        this.p2Sprite = null;
-        this.localFireballs = null;
-        this.remoteFireballs = null;
+
+        // Sprites
+        this.player1 = null;
+        this.player2 = null;
+
+        // Multiplayer refs — set by assignPlayers()
+        this.myPlayer = null;
+        this.otherPlayer = null;
+
+        // Shared fireball pool (owner tag prevents self-hits)
+        this.fireballs = null;
+
+        // Platforms
+        this.platforms = null;
+
+        // UI
+        this.playerIndicator = null;
+
+        // Input
         this.wasd = null;
-        this.stateUpdateTimer = 0;
-        this.STATE_UPDATE_INTERVAL = 50;
+
+        // STATE_UPDATE throttle
+        this.stateTimer = 0;
+        this.STATE_INTERVAL = 50; // ms → 20 updates/sec
     }
 
+    // ── preload ───────────────────────────────────────────────────────────────
+    preload() {
+        this.load.image('bg1', 'assets/parallax_mountain_pack/layers/parallax-mountain-bg.png');
+        this.load.image('bg2', 'assets/parallax_mountain_pack/layers/parallax-mountain-montain-far.png');
+        this.load.image('bg3', 'assets/parallax_mountain_pack/layers/parallax-mountain-mountains.png');
+        this.load.image('bg4', 'assets/parallax_mountain_pack/layers/parallax-mountain-trees.png');
+        this.load.image('bg5', 'assets/parallax_mountain_pack/layers/parallax-mountain-foreground-trees.png');
+        this.load.spritesheet('rogue', 'assets/rogue spritesheet calciumtrice.png', {
+            frameWidth: 32,
+            frameHeight: 32
+        });
+        this.load.image('ruin', 'assets/classical_ruin_tiles.png');
+    }
+
+    // ── create ────────────────────────────────────────────────────────────────
     create() {
         try {
             gameSceneRef = this;
             const { width, height } = this.scale;
 
-            createRectTexture(this, 'player1_tex', 40, 40, 0x4488ff);
-            createRectTexture(this, 'player2_tex', 40, 40, 0xff4444);
+            // ── Parallax background ───────────────────────────────────────────
+            this.bg1 = this.add.image(width / 2, height / 2, 'bg1').setDisplaySize(width, height).setDepth(-5);
+            this.bg2 = this.add.image(width / 2, height / 2, 'bg2').setDisplaySize(width, height).setDepth(-4);
+            this.bg3 = this.add.image(width / 2, height / 2, 'bg3').setDisplaySize(width, height).setDepth(-3);
+            this.bg4 = this.add.image(width / 2, height / 2, 'bg4').setDisplaySize(width, height).setDepth(-2);
+            this.bg5 = this.add.image(width / 2, height / 2, 'bg5').setDisplaySize(width, height).setDepth(-1);
+
+            // ── Fireball texture ──────────────────────────────────────────────
             createCircleTexture(this, 'fireball_tex', 10, 0xff8800);
-            createCircleTexture(this, 'remote_fireball_tex', 10, 0xbb44ff);
 
-            const floor = this.physics.add.staticGroup();
-            const floorTile = this.add.rectangle(width / 2, height - 20, width, 40, 0x1a1e2b);
-            this.physics.add.existing(floorTile, true);
-            floor.add(floorTile);
-
-            const platform = this.add.rectangle(width / 2, height * 0.55, 200, 20, 0x252d3a);
-            this.physics.add.existing(platform, true);
-            floor.add(platform);
-
-            this.p1Sprite = this.physics.add.sprite(160, height / 2, 'player1_tex');
-            this.p1Sprite.setCollideWorldBounds(true).setDragX(800);
-
-            this.p2Sprite = this.physics.add.sprite(width - 160, height / 2, 'player2_tex');
-            this.p2Sprite.setCollideWorldBounds(true).setDragX(800);
-
-            this.physics.add.collider(this.p1Sprite, floor);
-            this.physics.add.collider(this.p2Sprite, floor);
-
-            this.localFireballs = this.physics.add.group({ defaultKey: 'fireball_tex', maxSize: 20, allowGravityY: false });
-            this.remoteFireballs = this.physics.add.group({ defaultKey: 'remote_fireball_tex', maxSize: 20, allowGravityY: false });
-
-            this.wasd = {
-                left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-                right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-                up: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-            };
-
-            this.input.on('pointerdown', (pointer) => {
-                if (this.localPlayer) this.spawnLocalFireball(pointer.worldX, pointer.worldY, 1.0);
+            // ── Animations ───────────────────────────────────────────────────
+            this.anims.create({
+                key: 'rogue-idle',
+                frames: this.anims.generateFrameNumbers('rogue', { start: 0, end: 9 }),
+                frameRate: 10,
+                repeat: -1
+            });
+            this.anims.create({
+                key: 'rogue-cast',
+                frames: this.anims.generateFrameNumbers('rogue', { start: 10, end: 19 }),
+                frameRate: 15,
+                repeat: 0
+            });
+            this.anims.create({
+                key: 'rogue-run',
+                frames: this.anims.generateFrameNumbers('rogue', { start: 20, end: 29 }),
+                frameRate: 15,
+                repeat: -1
             });
 
-            this.physics.world.on('worldbounds', (body) => {
-                if (body.gameObject?.active) {
-                    body.gameObject.setActive(false).setVisible(false);
-                    body.setVelocity(0, 0);
+            // ── Player sprites ────────────────────────────────────────────────
+            this.player1 = this.physics.add.sprite(200, height / 2, 'rogue');
+            this.player1.setCollideWorldBounds(true).setScale(3.5).setImmovable(true);
+            this.player1.hp = 100;
+            this.player1.isInvulnerable = false;
+            this.player1.hpBar = this.add.graphics();
+
+            this.player2 = this.physics.add.sprite(width - 200, height / 2, 'rogue');
+            this.player2.setCollideWorldBounds(true).setScale(3.5).setImmovable(true).setFlipX(true);
+            this.player2.hp = 100;
+            this.player2.isInvulnerable = false;
+            this.player2.hpBar = this.add.graphics();
+
+            // ── Platforms (ruin tile tileSprite) ──────────────────────────────
+            this.textures.get('ruin').add('plat_stone', 0, 192, 208, 64, 32);
+            this.platforms = this.physics.add.staticGroup();
+
+            const makePlat = (x, y, w) => {
+                const plat = this.add.tileSprite(x, y, w, 32 * 1.5, 'ruin', 'plat_stone');
+                plat.tileScaleX = 1.5;
+                plat.tileScaleY = 1.5;
+                this.physics.add.existing(plat, true);
+                this.platforms.add(plat);
+            };
+
+            makePlat(width * 0.25, height - 150, 256);
+            makePlat(width * 0.75, height - 250, 256);
+            makePlat(width * 0.5, height - 400, 256);
+
+            this.physics.add.collider(this.player1, this.platforms);
+            this.physics.add.collider(this.player2, this.platforms);
+
+            // ── Fireball group ────────────────────────────────────────────────
+            this.fireballs = this.physics.add.group({
+                defaultKey: 'fireball_tex',
+                maxSize: 30,
+                allowGravityY: false,
+            });
+
+            // Fireballs collide with platforms
+            this.physics.add.collider(this.fireballs, this.platforms, (fb) => {
+                if (fb.active) {
+                    fb.disableBody(true, true);
+                    fb.setPosition(-9999, -9999);
                 }
             });
 
-            this.p1HpText = this.add.text(20, 20, 'P1 HP: 100', { fontFamily: 'Georgia, serif', fontSize: '20px', color: '#4488ff' });
-            this.p2HpText = this.add.text(width - 20, 20, 'P2 HP: 100', { fontFamily: 'Georgia, serif', fontSize: '20px', color: '#ff4444' }).setOrigin(1, 0);
+            // Fireballs can hit either player (owner tag prevents self-hit)
+            this.physics.add.overlap(this.fireballs, this.player1, this.onFireballHit, null, this);
+            this.physics.add.overlap(this.fireballs, this.player2, this.onFireballHit, null, this);
 
+            // ── Input ─────────────────────────────────────────────────────────
+            this.wasd = {
+                left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+                right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+                jump: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+            };
+
+            // Click to cast (fallback / dev mode)
+            this.input.on('pointerdown', (pointer) => {
+                if (this.myPlayer) this.castFireball(pointer);
+            });
+
+            // Cast animation fires on mousedown for responsiveness
+            this.game.canvas.addEventListener('mousedown', () => {
+                if (!this.myPlayer || this.myPlayer.isCasting) return;
+                this.myPlayer.isCasting = true;
+                this.myPlayer.anims.play('rogue-cast', true);
+                this.myPlayer.once('animationcomplete-rogue-cast', () => {
+                    this.myPlayer.isCasting = false;
+                });
+            });
+
+            // ── World bounds clean-up ─────────────────────────────────────────
+            this.physics.world.on('worldbounds', (body) => {
+                if (body.gameObject?.active) {
+                    body.gameObject.disableBody(true, true);
+                    body.gameObject.setPosition(-9999, -9999);
+                }
+            });
+
+            // ── Assign local/remote if ID already known ───────────────────────
             this.assignPlayers();
+
             console.log('[GameScene]: create() complete. myPlayerId =', myPlayerId);
         } catch (err) {
             console.error('[GameScene create Error]:', err);
         }
     }
 
+    // ── assignPlayers ─────────────────────────────────────────────────────────
     assignPlayers() {
-        if (!myPlayerId) { console.warn('[assignPlayers]: myPlayerId not yet set'); return; }
+        if (!myPlayerId || this.myPlayer) return; // not ready or already done
+
         if (myPlayerId === 'Player 1') {
-            this.localPlayer = this.p1Sprite;
-            this.remotePlayer = this.p2Sprite;
+            this.myPlayer = this.player1;
+            this.otherPlayer = this.player2;
         } else {
-            this.localPlayer = this.p2Sprite;
-            this.remotePlayer = this.p1Sprite;
+            this.myPlayer = this.player2;
+            this.otherPlayer = this.player1;
         }
-        this.setupCollisions();
-        console.log(`[GameScene]: localPlayer = ${myPlayerId}`);
+
+        // Local player gets physics; remote is network-driven
+        this.myPlayer.setImmovable(false).setDragX(800);
+        this.otherPlayer.setImmovable(true).setDragX(0);
+
+        // Floating arrow indicator
+        this.playerIndicator = this.add.text(
+            this.myPlayer.x, this.myPlayer.y - 70, '▼', {
+            fontSize: '28px', fill: '#ffff00',
+            stroke: '#000000', strokeThickness: 4
+        }
+        ).setOrigin(0.5).setDepth(10);
+
+        console.log(`[GameScene]: assignPlayers() done — I am ${myPlayerId}`);
     }
 
-    setupCollisions() {
-        if (this._overlapLocal) this._overlapLocal.destroy();
-        if (this._overlapRemote) this._overlapRemote.destroy();
-        this._overlapLocal = this.physics.add.overlap(this.localFireballs, this.remotePlayer, this.onLocalFireballHit, null, this);
-        this._overlapRemote = this.physics.add.overlap(this.remoteFireballs, this.localPlayer, this.onRemoteFireballHit, null, this);
-    }
-
+    // ── update ────────────────────────────────────────────────────────────────
     update(time, delta) {
         try {
-            if (!this.localPlayer) return;
-            this.handleLocalPlayerMovement();
-            this.killOffscreenFireballs();
-            this.stateUpdateTimer += delta;
-            if (this.stateUpdateTimer >= this.STATE_UPDATE_INTERVAL) {
-                this.stateUpdateTimer = 0;
+            // Retry assignment every frame until server responds
+            if (!this.myPlayer && myPlayerId) this.assignPlayers();
+            if (!this.myPlayer) return;
+
+            this.handleMyMovement();
+            this.updatePlayerAnimations(this.player1);
+            this.updatePlayerAnimations(this.player2);
+            this.updateHealthBar(this.player1);
+            this.updateHealthBar(this.player2);
+
+            // Bobbing indicator
+            if (this.playerIndicator) {
+                const bob = Math.sin(time / 150) * 8;
+                this.playerIndicator.setPosition(this.myPlayer.x, this.myPlayer.y - 70 + bob);
+                this.playerIndicator.setVisible(this.myPlayer.active);
+            }
+
+            // Throttled STATE_UPDATE
+            this.stateTimer += delta;
+            if (this.stateTimer >= this.STATE_INTERVAL) {
+                this.stateTimer = 0;
                 socket.emit('STATE_UPDATE', {
-                    x: this.localPlayer.x,
-                    y: this.localPlayer.y,
-                    velocity: { x: this.localPlayer.body.velocity.x, y: this.localPlayer.body.velocity.y }
+                    x: this.myPlayer.x,
+                    y: this.myPlayer.y,
+                    vx: this.myPlayer.body.velocity.x,
+                    vy: this.myPlayer.body.velocity.y,
                 });
             }
         } catch (err) {
@@ -393,111 +519,240 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    handleLocalPlayerMovement() {
+    // ── handleMyMovement ─────────────────────────────────────────────────────
+    handleMyMovement() {
         const speedMult = (typeof playerSpeed !== 'undefined') ? playerSpeed : 1.0;
-        const speed = 280 * speedMult;
-        const p = this.localPlayer;
+        const speed = 400 * speedMult;
+        const jumpForce = -750;
+        const p = this.myPlayer;
+
         p.setVelocityX(0);
         if (this.wasd.left.isDown) p.setVelocityX(-speed);
         if (this.wasd.right.isDown) p.setVelocityX(speed);
-        if (this.wasd.up.isDown && p.body.blocked.down) p.setVelocityY(-520);
-    }
 
-    killOffscreenFireballs() {
-        const kill = (group) => group.getChildren().forEach((fb) => {
-            if (!fb.active) return;
-            if (fb.x < -50 || fb.x > this.scale.width + 50 || fb.y < -50 || fb.y > this.scale.height + 50) {
-                fb.setActive(false).setVisible(false);
-                fb.body.setVelocity(0, 0);
+        // Double-jump
+        if (p.body.blocked.down || p.body.touching.down) p.jumps = 0;
+        if (Phaser.Input.Keyboard.JustDown(this.wasd.jump)) {
+            if (p.jumps === undefined) p.jumps = 0;
+            if (p.jumps < 2) {
+                p.setVelocityY(jumpForce);
+                p.jumps++;
             }
-        });
-        kill(this.localFireballs);
-        kill(this.remoteFireballs);
-    }
-
-    spawnLocalFireball(targetX, targetY, scale) {
-        try {
-            const fireball = this.localFireballs.get(this.localPlayer.x, this.localPlayer.y);
-            if (!fireball) { console.warn('[spawnLocalFireball]: Pool exhausted.'); return; }
-            fireball.setActive(true).setVisible(true).setScale(scale);
-            fireball.body.allowGravity = false;
-            fireball.body.setCollideWorldBounds(true);
-            fireball.body.onWorldBounds = true;
-            const dx = targetX - this.localPlayer.x;
-            const dy = targetY - this.localPlayer.y;
-            const mag = Math.sqrt(dx * dx + dy * dy) || 1;
-            const angle = Math.atan2(dy, dx);
-            fireball.body.setVelocity((dx / mag) * 480, (dy / mag) * 480);
-            socket.emit('SPELL_CAST', { spell: 'fireball', x: this.localPlayer.x, y: this.localPlayer.y, angle, scale });
-        } catch (err) {
-            console.error('[spawnLocalFireball Error]:', err);
         }
     }
 
+    // ── updatePlayerAnimations ────────────────────────────────────────────────
+    updatePlayerAnimations(player) {
+        if (!player?.active || player.isCasting) return;
+        if (Math.abs(player.body.velocity.x) > 5 || Math.abs(player.body.velocity.y) > 10) {
+            player.anims.play('rogue-run', true);
+        } else {
+            player.anims.play('rogue-idle', true);
+        }
+        if (player.body.velocity.x < -5) player.setFlipX(true);
+        else if (player.body.velocity.x > 5) player.setFlipX(false);
+    }
+
+    // ── updateHealthBar ───────────────────────────────────────────────────────
+    updateHealthBar(player) {
+        if (!player?.hpBar) return;
+        player.hpBar.clear();
+        if (!player.active || player.hp <= 0) return;
+
+        const barWidth = 200, barHeight = 18;
+        const x = (player === this.player1) ? 20 : this.scale.width - barWidth - 20;
+        const y = 20;
+
+        player.hpBar.fillStyle(0x000000, 1);
+        player.hpBar.fillRect(x, y, barWidth, barHeight);
+
+        const color = player.hp > 30 ? 0x00ff00 : 0xff0000;
+        player.hpBar.fillStyle(color, 1);
+        player.hpBar.fillRect(x + 2, y + 2, (barWidth - 4) * (player.hp / 100), barHeight - 4);
+    }
+
+    // ── castFireball (pointer click / audio bridge) ───────────────────────────
+    castFireball(pointer) {
+        try {
+            if (!this.myPlayer) return;
+
+            const fireball = this.fireballs.get();
+            if (!fireball) { console.warn('[castFireball]: Pool exhausted.'); return; }
+
+            fireball.enableBody(true, this.myPlayer.x, this.myPlayer.y, true, true);
+            fireball.body.allowGravity = false;
+            fireball.body.setCollideWorldBounds(true);
+            fireball.body.onWorldBounds = true;
+            fireball.owner = this.myPlayer;
+
+            const dx = pointer.worldX - this.myPlayer.x;
+            const dy = pointer.worldY - this.myPlayer.y;
+            const mag = Math.sqrt(dx * dx + dy * dy) || 1;
+            const speed = 450;
+
+            fireball.body.setVelocity((dx / mag) * speed, (dy / mag) * speed);
+
+            socket.emit('SPELL_CAST', {
+                spell: 'fireball',
+                x: this.myPlayer.x,
+                y: this.myPlayer.y,
+                targetX: pointer.worldX,
+                targetY: pointer.worldY,
+                angle: Math.atan2(dy, dx),
+                scale: fireball.scaleX,
+            });
+        } catch (err) {
+            console.error('[castFireball Error]:', err);
+        }
+    }
+
+    // ── castSpellFromResult (called by window.castSpellFromAudio) ─────────────
     castSpellFromResult(result) {
         try {
-            if (!this.localPlayer) return;
+            if (!this.myPlayer) return;
+
             if (result.backfire) {
-                this.spawnExplosion(this.localPlayer.x, this.localPlayer.y, 0xff0000);
-                console.log('[castSpellFromResult]: BACKFIRE!');
+                this.spawnExplosion(this.myPlayer.x, this.myPlayer.y, 0xff0000);
+                // Self-damage on backfire
+                this.myPlayer.hp = Math.max(0, this.myPlayer.hp - 15);
+                console.log('[castSpellFromResult]: BACKFIRE! Self-damage.');
                 return;
             }
-            const targetX = this.remotePlayer ? this.remotePlayer.x : this.scale.width / 2;
-            const targetY = this.remotePlayer ? this.remotePlayer.y : this.scale.height / 2;
-            this.spawnLocalFireball(targetX, targetY, volumeToScale(result.volume));
+
+            const scale = volumeToScale(result.volume);
+
+            // Aim at the cursor position if available, otherwise at opponent
+            const targetX = this.input.activePointer.worldX || (this.otherPlayer?.x ?? this.scale.width / 2);
+            const targetY = this.input.activePointer.worldY || (this.otherPlayer?.y ?? this.scale.height / 2);
+
+            const fireball = this.fireballs.get();
+            if (!fireball) return;
+
+            fireball.enableBody(true, this.myPlayer.x, this.myPlayer.y, true, true);
+            fireball.setScale(scale);
+            fireball.body.allowGravity = false;
+            fireball.body.setCollideWorldBounds(true);
+            fireball.body.onWorldBounds = true;
+            fireball.owner = this.myPlayer;
+
+            const dx = targetX - this.myPlayer.x;
+            const dy = targetY - this.myPlayer.y;
+            const mag = Math.sqrt(dx * dx + dy * dy) || 1;
+            const speed = 450;
+
+            fireball.body.setVelocity((dx / mag) * speed, (dy / mag) * speed);
+
+            socket.emit('SPELL_CAST', {
+                spell: result.spell,
+                x: this.myPlayer.x,
+                y: this.myPlayer.y,
+                targetX: targetX,
+                targetY: targetY,
+                angle: Math.atan2(dy, dx),
+                scale: scale,
+            });
         } catch (err) {
             console.error('[castSpellFromResult Error]:', err);
         }
     }
 
+    // ── spawnExplosion ────────────────────────────────────────────────────────
     spawnExplosion(x, y, color = 0xff8800) {
         try {
             const circle = this.add.graphics();
             circle.fillStyle(color, 0.85);
             circle.fillCircle(0, 0, 40);
             circle.setPosition(x, y);
-            this.add.tween({ targets: circle, alpha: 0, scaleX: 3, scaleY: 3, duration: 400, ease: 'Power2', onComplete: () => circle.destroy() });
+            this.add.tween({
+                targets: circle,
+                alpha: 0, scaleX: 3, scaleY: 3,
+                duration: 400, ease: 'Power2',
+                onComplete: () => circle.destroy()
+            });
         } catch (err) {
             console.error('[spawnExplosion Error]:', err);
         }
     }
 
-    onLocalFireballHit(fireball, remotePlayer) {
+    // ── onFireballHit ─────────────────────────────────────────────────────────
+    onFireballHit(obj1, obj2) {
         try {
-            fireball.setActive(false).setVisible(false);
-            fireball.body.setVelocity(0, 0);
-            this.spawnExplosion(remotePlayer.x, remotePlayer.y);
-            console.log('[GameScene]: Local fireball hit remote player!');
-        } catch (err) { console.error('[onLocalFireballHit Error]:', err); }
+            const isPlayer = (o) => o === this.player1 || o === this.player2;
+            const player = isPlayer(obj1) ? obj1 : obj2;
+            const fireball = isPlayer(obj1) ? obj2 : obj1;
+
+            if (!fireball.active) return;
+            if (fireball.owner === player) return; // no self-hits
+
+            fireball.disableBody(true, true);
+            fireball.setPosition(-9999, -9999);
+
+            if (!player.active || player.isInvulnerable) return;
+
+            player.hp = Math.max(0, player.hp - 10);
+            player.isInvulnerable = true;
+            this.time.delayedCall(100, () => { player.isInvulnerable = false; });
+
+            // Flash tint
+            player.setTint(0xff0000);
+            this.time.delayedCall(200, () => { player.clearTint(); });
+
+            if (player.hp <= 0) {
+                console.log('[GameScene]:', player === this.myPlayer ? 'I died!' : 'Opponent died!');
+                player.setActive(false).setVisible(false);
+                player.body.setVelocity(0, 0);
+                if (player.hpBar) player.hpBar.clear();
+
+                // Respawn after 3 seconds
+                this.time.delayedCall(3000, () => {
+                    player.hp = 100;
+                    player.setActive(true).setVisible(true);
+                    const spawnX = (player === this.player1) ? 200 : this.scale.width - 200;
+                    player.setPosition(spawnX, this.scale.height / 2);
+                });
+            } else {
+                console.log('[GameScene]:', player === this.myPlayer
+                    ? `I was hit! HP: ${player.hp}`
+                    : `Hit opponent! HP: ${player.hp}`);
+            }
+        } catch (err) {
+            console.error('[onFireballHit Error]:', err);
+        }
     }
 
-    onRemoteFireballHit(fireball, localPlayer) {
-        try {
-            fireball.setActive(false).setVisible(false);
-            fireball.body.setVelocity(0, 0);
-            this.spawnExplosion(localPlayer.x, localPlayer.y, 0xbb44ff);
-            console.log('[GameScene]: Remote fireball hit local player!');
-        } catch (err) { console.error('[onRemoteFireballHit Error]:', err); }
-    }
-
+    // ── onRemoteStateUpdate (socket BROADCAST_STATE) ──────────────────────────
     onRemoteStateUpdate(data) {
         try {
-            if (!this.remotePlayer) return;
-            this.remotePlayer.setPosition(data.x, data.y);
-            if (data.velocity) this.remotePlayer.setVelocity(data.velocity.x, data.velocity.y);
-        } catch (err) { console.error('[onRemoteStateUpdate Error]:', err); }
+            if (!this.otherPlayer) return;
+            this.otherPlayer.setPosition(data.x, data.y);
+            if (data.vx !== undefined) this.otherPlayer.setVelocity(data.vx, data.vy);
+        } catch (err) {
+            console.error('[onRemoteStateUpdate Error]:', err);
+        }
     }
 
+    // ── onRemoteSpell (socket BROADCAST_SPELL) ────────────────────────────────
     onRemoteSpell(data) {
         try {
-            const fireball = this.remoteFireballs.get(data.x, data.y);
-            if (!fireball) { console.warn('[onRemoteSpell]: Remote pool exhausted.'); return; }
-            fireball.setActive(true).setVisible(true).setScale(data.scale || 1.0);
+            const fireball = this.fireballs.get();
+            if (!fireball) { console.warn('[onRemoteSpell]: Pool exhausted.'); return; }
+
+            fireball.enableBody(true, data.x, data.y, true, true);
+            fireball.setScale(data.scale || 1.0);
             fireball.body.allowGravity = false;
             fireball.body.setCollideWorldBounds(true);
             fireball.body.onWorldBounds = true;
-            fireball.body.setVelocity(Math.cos(data.angle) * 480, Math.sin(data.angle) * 480);
-        } catch (err) { console.error('[onRemoteSpell Error]:', err); }
+            fireball.owner = this.otherPlayer; // tag so it can't hit the sender
+
+            const dx = data.targetX - data.x;
+            const dy = data.targetY - data.y;
+            const mag = Math.sqrt(dx * dx + dy * dy) || 1;
+            const speed = 450;
+
+            fireball.body.setVelocity((dx / mag) * speed, (dy / mag) * speed);
+        } catch (err) {
+            console.error('[onRemoteSpell Error]:', err);
+        }
     }
 }
 
@@ -508,9 +763,19 @@ const config = {
     width: window.innerWidth,
     height: window.innerHeight,
     parent: 'game-container',
-    transparent: true,
-    scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
-    physics: { default: 'arcade', arcade: { gravity: { y: 480 }, debug: false } },
+    backgroundColor: '#1a1a2e',
+    pixelArt: true,
+    scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+    },
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 1500 },
+            debug: false,
+        },
+    },
     scene: [MainMenuScene, GameScene, EndScene],
 };
 
