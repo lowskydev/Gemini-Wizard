@@ -143,3 +143,6 @@ vite.config.ts.timestamp-*
 
 # Certificates
 server/cert/*.pem
+server/cert/cert.pem
+server/cert/key.pem
+*.pem
