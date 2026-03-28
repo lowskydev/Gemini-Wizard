@@ -25,7 +25,10 @@ const PLAYER_SPEED_CASTING = 0.5;  // Movement multiplier while holding SHIFT
 const API_KEY = CONFIG.GEMINI_API_KEY;
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
 
-const SYSTEM_PROMPT = `Listen to the audio. The user is trying to cast a spell in a wizard game.
+const SYSTEM_PROMPT = `Listen to the audio. The user is trying to cast a spell in a wizard game by saying one of exactly 5 valid spell names.
+
+The ONLY valid spell names are: "fireball", "frostbite", "bolt", "nova", "surprise".
+Partial words, similar words, or anything else does NOT count as a valid spell.
 
 Return ONLY a valid JSON object matching this schema:
 {
@@ -35,9 +38,9 @@ Return ONLY a valid JSON object matching this schema:
 }
 
 Rules:
-- "spell" -> the spell name the user said.
-- "clarity" -> how accurately and clearly the spell word was spoken (0 = totally unintelligible, 100 = crystal clear).
-- "backfire" -> true if the user was mumbling, stuttering, or completely unintelligible. If backfire is true, clarity should be under 30.
+- "spell" -> the spell the user said. If the word does not exactly match one of the 5 valid names, set backfire to true and pick the closest spell only as a formality.
+- "clarity" -> how closely the spoken word matched a valid spell name (0 = nothing recognizable, 100 = said the full spell name perfectly). Saying only part of a spell name (e.g. "fire" instead of "fireball") should score below 40. Saying a random word that is not a spell should score below 20.
+- "backfire" -> true if: the user said a partial spell name (e.g. "fire", "ball", "frost"), said something that is not a spell name at all, was mumbling or stuttering, or was inaudible. Only set backfire to false if the user clearly said one of the 5 exact spell names.
 
 Do not wrap the output in markdown code blocks.`;
 
