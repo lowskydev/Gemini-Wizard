@@ -1,8 +1,10 @@
-# Wizard Arena
+# Gemini Wizard Hackaton Project
+
+Hackathon Project Developed for the **Software Mansion x Gemini Hackathon**.
 
 A 2-player LAN wizard duel — shout spells into your microphone, aim with your mouse, and blast your opponent off the platforms.
 
-Built with Phaser 3, Socket.io, Web Audio, and the Gemini AI API.
+Built with Phaser 3, Socket.io, Web Audio, WebGPU and the Gemini AI API.
 
 ![Wizard Arena Gameplay](assets/public/gameplay.png)
 
